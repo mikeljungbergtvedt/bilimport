@@ -386,6 +386,103 @@ details.manual[open]>summary::before{content:"▾ ";}
     el.textContent = msg || "";
   }
 
+  function parseListingText(text) {
+    const found = {
+      ok: true, id: null, priceEur: null, inclMwst: null, firstReg: null,
+      km: null, weightKg: null, co2: null, fuel: null, title: null, notes: []
+    };
+    const raw = String(text || "").replace(/\u00a0/g, " ");
+
+    const mobileUrl = extractMobileUrl(raw);
+    found.id = extractListingId(raw) || (mobileUrl && extractListingId(mobileUrl)) || null;
+
+    let m = raw.match(/(?:€\s*|EUR\s*)(\d{1,3}(?:[.\s]\d{3})+|\d+)(?:[,\.]\d+)?/i) ||
+      raw.match(/(\d{1,3}(?:[.\s]\d{3})+|\d+)(?:[,\.]\d+)?\s*(?:€|EUR)/i);
+    if (m) found.priceEur = parseInt(m[1].replace(/[.\s]/g, ""), 10);
+
+    m = raw.match(/(?:Erstzulassung|EZ|1\.\s*Zulassung|Første\s*reg)[:\s]*(\d{1,2}[./]\d{1,2}[./]\d{4}|\d{1,2}[./]\d{4})/i);
+    if (m) found.firstReg = parseGermanDate(m[1]);
+    else {
+      m = raw.match(/\b(\d{2}\.\d{2}\.\d{4})\b/);
+      if (m) found.firstReg = parseGermanDate(m[1]);
+    }
+
+    m = raw.match(/(\d{1,3}(?:[.\s]\d{3})+|\d+)\s*km\b/i);
+    if (m) found.km = parseInt(m[1].replace(/[.\s]/g, ""), 10);
+
+    m = raw.match(/(\d{2,3})\s*g\s*\/?\s*km/i) || raw.match(/CO\s*[₂2]\s*[:\s]*(\d{1,3})/i);
+    if (m) found.co2 = parseInt(m[1], 10);
+
+    m = raw.match(/(?:Leergewicht|Eigengewicht|Egenvekt|Gewicht)[:\s]*(\d{3,4})\s*kg/i) ||
+      raw.match(/(\d{3,4})\s*kg\b/i);
+    if (m) found.weightKg = parseInt(m[1], 10);
+
+    if (/\b(Elektro|Electric|Elbil|Strom)\b/i.test(raw)) found.fuel = "el";
+    else if (/\b(Hybrid|Plugin|Plug-in)\b/i.test(raw)) found.fuel = "hybrid";
+    else if (/\b(Diesel)\b/i.test(raw)) found.fuel = "diesel";
+    else if (/\b(Benzin|Petrol|Gasoline|Bensin)\b/i.test(raw)) found.fuel = "bensin";
+
+    const noVat = /Differenzbesteuerung|MwSt\.?\s*nicht\s*ausweisbar|§\s*25a/i.test(raw);
+    const withVat = /MwSt\.?\s*ausweisbar|inkl\.?\s*(?:19\s*%\s*)?MwSt|VAT\s*deductible/i.test(raw);
+    if (noVat) found.inclMwst = false;
+    else if (withVat) found.inclMwst = true;
+
+    const lines = raw.split(/\n/).map((l) => l.trim()).filter(Boolean);
+    if (lines.length) {
+      const titleLine = lines.find((l) =>
+        /[A-Za-z]{2,}/.test(l) && !/^https?:/.test(l) && l.length < 120
+      );
+      if (titleLine) found.title = titleLine.slice(0, 100);
+    }
+    return found;
+  }
+
+  function listingHasFields(data) {
+    if (!data) return false;
+    return data.priceEur != null || data.weightKg != null || data.firstReg ||
+      data.km != null || data.co2 != null || data.fuel || data.inclMwst != null;
+  }
+
+  function fetchViaProxyJsonp(id) {
+    return new Promise((resolve, reject) => {
+      const base = PROXY_BASE.replace(/\/$/, "");
+      const cbName = "bilimportCb_" + Math.random().toString(36).slice(2, 10);
+      const script = document.createElement("script");
+      let settled = false;
+      const cleanup = () => {
+        try { delete window[cbName]; } catch (_) { window[cbName] = undefined; }
+        if (script.parentNode) script.parentNode.removeChild(script);
+      };
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(new Error("JSONP timeout (25s)"));
+      }, 25000);
+      window[cbName] = (data) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        cleanup();
+        if (!data || data.ok === false) {
+          reject(new Error((data && data.error) || "Proxy JSONP feilet"));
+          return;
+        }
+        resolve(data);
+      };
+      script.onerror = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        cleanup();
+        reject(new Error("JSONP script load failed"));
+      };
+      const qs = "?id=" + encodeURIComponent(id) + "&callback=" + encodeURIComponent(cbName);
+      script.src = base + qs;
+      document.head.appendChild(script);
+    });
+  }
+
   async function fetchViaProxyJson(id, mobileUrl) {
     const base = PROXY_BASE.replace(/\/$/, "");
     const qs = id ? ("?id=" + encodeURIComponent(id)) :
@@ -395,6 +492,16 @@ details.manual[open]>summary::before{content:"▾ ";}
     const data = await res.json();
     if (!data || data.ok === false) throw new Error((data && data.error) || "Proxy feilet");
     return data;
+  }
+
+  async function fetchViaProxy(id, mobileUrl) {
+    const base = PROXY_BASE || "";
+    if (/script\.google\.com/i.test(base)) {
+      const listingId = id || extractListingId(mobileUrl);
+      if (!listingId) throw new Error("Mangler listing-id for JSONP");
+      return fetchViaProxyJsonp(listingId);
+    }
+    return fetchViaProxyJson(id, mobileUrl);
   }
 
   async function fetchListingHtml(id) {
@@ -421,6 +528,38 @@ details.manual[open]>summary::before{content:"▾ ";}
     throw lastErr || new Error("Kunne ikke hente annonse");
   }
 
+  async function fetchListingData(id, mobileUrl) {
+    const listingId = id || extractListingId(mobileUrl);
+    if (PROXY_BASE) {
+      return fetchViaProxy(id, mobileUrl);
+    }
+    if (!listingId) throw new Error("Mangler listing-id");
+    const html = await fetchListingHtml(listingId);
+    const data = parseListingHtml(html);
+    data.id = data.id || listingId;
+    return data;
+  }
+
+  function showListingMeta(data) {
+    const bits = [];
+    if (data.title) bits.push("<strong>" + escapeHtml(data.title) + "</strong>");
+    if (data.id) bits.push("id " + escapeHtml(data.id));
+    if (data.km != null) bits.push(data.km.toLocaleString("nb-NO") + " km");
+    $("listingMeta").innerHTML = bits.join(" · ");
+  }
+
+  function statusFromData(data, prefix) {
+    const found = [];
+    if (data.priceEur != null) found.push(data.priceEur + " €");
+    if (data.inclMwst === true) found.push("MwSt ja");
+    if (data.inclMwst === false) found.push("MwSt nei");
+    if (data.firstReg) found.push("EZ " + data.firstReg);
+    if (data.weightKg) found.push(data.weightKg + " kg");
+    if (data.fuel) found.push(data.fuel);
+    if (data.co2 == null) found.push("CO₂ mangler");
+    return (prefix || "Fant: ") + found.join(", ");
+  }
+
   async function beregn() {
     const text = $("paste").value.trim();
     if (!text) {
@@ -438,47 +577,55 @@ details.manual[open]>summary::before{content:"▾ ";}
     $("btnCalc").disabled = true;
     setStatus("", "Henter annonse…");
 
-    try {
-      let data;
-      if (PROXY_BASE) {
-        data = await fetchViaProxyJson(id, mobileUrl);
-      } else {
-        const listingId = id || extractListingId(mobileUrl);
-        if (!listingId) throw new Error("Mangler listing-id");
-        const html = await fetchListingHtml(listingId);
-        data = parseListingHtml(html);
-        data.id = data.id || listingId;
-      }
+    const pasteParsed = parseListingText(text);
+    let fetchErr = null;
+    let data = null;
 
-      if (data.priceEur == null && data.weightKg == null) {
+    try {
+      data = await fetchListingData(id, mobileUrl);
+      if (data.priceEur == null && data.weightKg == null && !listingHasFields(data)) {
         throw new Error("Fant ikke pris/vekt i annonsen");
       }
-
-      applyListing(data);
-      $("manualWrap").classList.remove("hidden");
-      $("resultCard").classList.remove("hidden");
-
-      const bits = [];
-      if (data.title) bits.push("<strong>" + escapeHtml(data.title) + "</strong>");
-      if (data.id) bits.push("id " + escapeHtml(data.id));
-      if (data.km != null) bits.push(data.km.toLocaleString("nb-NO") + " km");
-      $("listingMeta").innerHTML = bits.join(" · ");
-
-      calculate();
-      const found = [];
-      if (data.priceEur != null) found.push(data.priceEur + " €");
-      if (data.inclMwst === true) found.push("MwSt ja");
-      if (data.inclMwst === false) found.push("MwSt nei");
-      if (data.firstReg) found.push("EZ " + data.firstReg);
-      if (data.weightKg) found.push(data.weightKg + " kg");
-      if (data.fuel) found.push(data.fuel);
-      if (data.co2 == null) found.push("CO₂ mangler");
-      setStatus("ok", "Fant: " + found.join(", "));
     } catch (e) {
-      setStatus("error", "Feil: " + (e && e.message ? e.message : e) +
-        ". Sett PROXY_BASE til Worker/Apps Script, eller fyll manuelt.");
+      fetchErr = e;
+      data = null;
+    }
+
+    try {
+      if (data && listingHasFields(data)) {
+        applyListing(data);
+        $("manualWrap").classList.remove("hidden");
+        $("resultCard").classList.remove("hidden");
+        showListingMeta(data);
+        calculate();
+        setStatus("ok", statusFromData(data));
+        return;
+      }
+
+      if (listingHasFields(pasteParsed)) {
+        applyListing(pasteParsed);
+        $("manualWrap").classList.remove("hidden");
+        $("resultCard").classList.remove("hidden");
+        showListingMeta(pasteParsed);
+        calculate();
+        const msg = fetchErr
+          ? "Auto-hent feilet; brukte felter fra limt tekst. " + statusFromData(pasteParsed, "Fra tekst: ")
+          : statusFromData(pasteParsed, "Fra limt tekst: ");
+        setStatus("ok", msg);
+        return;
+      }
+
+      // Only id (or nothing useful) — do not claim success
       $("manualWrap").classList.remove("hidden");
       $("resultCard").classList.remove("hidden");
+      if (pasteParsed.id || id) {
+        const onlyId = pasteParsed.id || id;
+        $("listingMeta").innerHTML = "id " + escapeHtml(onlyId);
+      }
+      const why = fetchErr && fetchErr.message ? fetchErr.message : "ukjent feil";
+      setStatus("error",
+        "Auto-hent feilet (" + why + "). Kun listing-id funnet — fyll feltene manuelt. " +
+        "Full auto-hent krever proxy (Worker/Apps Script) senere.");
     } finally {
       $("btnCalc").disabled = false;
     }
