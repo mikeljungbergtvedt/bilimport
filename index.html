@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="nb">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f1419" />
+  <title>Bilimport – kostnadskalkulator</title>
+  <style>
+:root {
+  --bg: #0f1419;
+  --surface: #1a2332;
+  --surface2: #243044;
+  --border: #2d3a4f;
+  --text: #e8eef6;
+  --muted: #8b9bb4;
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --success: #22c55e;
+  --warn: #f59e0b;
+  --danger: #ef4444;
+  --total: #34d399;
+  --radius: 12px;
+  --tap: 48px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f4f6f9;
+    --surface: #ffffff;
+    --surface2: #eef2f7;
+    --border: #d0d8e4;
+    --text: #0f172a;
+    --muted: #64748b;
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --total: #059669;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { font-size: 16px; -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.45;
+  min-height: 100dvh;
+}
+
+.app {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 1rem 1rem 3rem;
+}
+
+header {
+  margin-bottom: 1.25rem;
+}
+
+header h1 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 0 0 0.25rem;
+  letter-spacing: -0.02em;
+}
+
+header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin-bottom: 0.875rem;
+}
+
+.card h2 {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 0 0 0.75rem;
+  font-weight: 600;
+}
+
+.row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.row > .grow { flex: 1; min-width: 0; }
+
+label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+  font-weight: 500;
+}
+
+.field {
+  margin-bottom: 0.75rem;
+}
+
+.field:last-child { margin-bottom: 0; }
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+input[type="text"],
+input[type="url"],
+input[type="number"],
+input[type="date"],
+select {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0.65rem 0.85rem;
+  font-size: 1rem;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+input:focus, select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+}
+
+input[type="checkbox"] {
+  width: 1.35rem;
+  height: 1.35rem;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: var(--tap);
+  cursor: pointer;
+}
+
+.check span {
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+button {
+  min-height: var(--tap);
+  padding: 0 1.1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  font-family: inherit;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  background: var(--accent);
+  color: #fff;
+  white-space: nowrap;
+  touch-action: manipulation;
+}
+
+button:hover { background: var(--accent-hover); }
+button:active { transform: scale(0.98); }
+button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+button.secondary {
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.status {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-top: 0.5rem;
+  min-height: 1.25em;
+}
+
+.status.error { color: var(--danger); }
+.status.ok { color: var(--success); }
+.status.warn { color: var(--warn); }
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.result-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.65rem 0.85rem;
+  background: var(--surface2);
+  border-radius: 10px;
+  gap: 0.75rem;
+}
+
+.result-row .label {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.result-row .value {
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.result-row.sub .value {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.result-row.total {
+  background: linear-gradient(135deg, rgba(52, 211, 153, 0.15), rgba(59, 130, 246, 0.12));
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  padding: 1rem 0.85rem;
+}
+
+.result-row.total .label {
+  color: var(--total);
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.result-row.total .value {
+  color: var(--total);
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.note {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 0.65rem;
+  line-height: 1.4;
+}
+
+.disclaimer {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-top: 1rem;
+  line-height: 1.5;
+}
+
+.disclaimer a {
+  color: var(--accent);
+}
+
+.badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.2);
+  color: var(--warn);
+  margin-left: 0.35rem;
+  vertical-align: middle;
+}
+
+.hidden { display: none !important; }
+
+footer {
+  text-align: center;
+  margin-top: 1.5rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 0.75rem 0.85rem;
+  font-size: 1rem;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  outline: none;
+  resize: vertical;
+  line-height: 1.4;
+}
+
+textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+}
+
+button.full {
+  width: 100%;
+  margin-top: 0.25rem;
+}
+
+</style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Bilimport NOK</h1>
+      <p>Landed cost-estimat (personbil, gruppe a · 2026)</p>
+    </header>
+
+    <section class="card">
+      <h2>Lim inn annonsetekst</h2>
+      <div class="field">
+        <label for="pasteText">Kopier tekst fra mobile.de-annonsen</label>
+        <textarea id="pasteText" rows="5" placeholder="Lim inn her: pris, Erstzulassung, km, kW, CO₂, Gewicht …"></textarea>
+      </div>
+      <button type="button" id="btnParseText" class="full">Tolke tekst</button>
+      <div class="status" id="pasteStatus" aria-live="polite"></div>
+    </section>
+
+    <section class="card">
+      <h2>URL (valgfritt)</h2>
+      <div class="row">
+        <div class="grow field" style="margin:0">
+          <label for="url">mobile.de-URL</label>
+          <input type="url" id="url" placeholder="https://suchen.mobile.de/..." inputmode="url" autocomplete="off" />
+        </div>
+        <div style="align-self:flex-end">
+          <button type="button" id="btnFetch">Hent</button>
+        </div>
+      </div>
+      <div class="status" id="fetchStatus" aria-live="polite"></div>
+      <p class="note">mobile.de blokkerer ofte server-hent. Bruk «Lim inn annonsetekst» i stedet.</p>
+    </section>
+
+    <section class="card">
+      <h2>Kjøp &amp; frakt</h2>
+      <div class="grid-2">
+        <div class="field">
+          <label for="priceEur">Pris (EUR)</label>
+          <input type="number" id="priceEur" min="0" step="1" inputmode="decimal" />
+        </div>
+        <div class="field">
+          <label for="eurNok">EUR/NOK</label>
+          <input type="number" id="eurNok" min="0" step="0.01" value="11.5" inputmode="decimal" />
+        </div>
+      </div>
+      <div class="field">
+        <label class="check">
+          <input type="checkbox" id="inclMwst" />
+          <span>Inkl. tysk MwSt 19 % (fradragsberettiget) – trekkes fra</span>
+        </label>
+        <div class="status" id="mwstStatus" aria-live="polite"></div>
+      </div>
+      <div class="grid-2">
+        <div class="field">
+          <label for="freight">Frakt (NOK)</label>
+          <input type="number" id="freight" min="0" step="100" value="8000" inputmode="decimal" />
+        </div>
+        <div class="field">
+          <label for="insurance">Forsikring (NOK)</label>
+          <input type="number" id="insurance" min="0" step="100" value="0" inputmode="decimal" />
+        </div>
+      </div>
+      <p class="note" id="rateNote">Kurs: standard 11,5 (redigerbar).</p>
+    </section>
+
+    <section class="card">
+      <h2>Kjøretøy</h2>
+      <div class="grid-2">
+        <div class="field">
+          <label for="firstReg">Første reg. (utland)</label>
+          <input type="date" id="firstReg" />
+        </div>
+        <div class="field">
+          <label for="noReg">Regdato Norge</label>
+          <input type="date" id="noReg" />
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="field">
+          <label for="weight">Egenvekt (kg)</label>
+          <input type="number" id="weight" min="0" step="1" inputmode="numeric" />
+        </div>
+        <div class="field">
+          <label for="co2">CO₂ (g/km)</label>
+          <input type="number" id="co2" min="0" step="1" inputmode="numeric" />
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="field">
+          <label for="fuel">Drivstoff</label>
+          <select id="fuel">
+            <option value="bensin">Bensin</option>
+            <option value="diesel">Diesel</option>
+            <option value="hybrid">Hybrid</option>
+            <option value="el">El</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="powerKw">Effekt (kW)</label>
+          <input type="number" id="powerKw" min="0" step="1" inputmode="numeric" />
+        </div>
+      </div>
+      <div class="field">
+        <label class="check">
+          <input type="checkbox" id="nedc" />
+          <span>NEDC (×1,24 CO₂) – typisk før 01.09.2018</span>
+        </label>
+      </div>
+      <div class="field">
+        <label for="mileage">Kilometerstand</label>
+        <input type="number" id="mileage" min="0" step="1" inputmode="numeric" />
+      </div>
+      <div class="field">
+        <label for="title">Tittel / bil</label>
+        <input type="text" id="title" placeholder="Valgfritt" autocomplete="off" />
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Estimat</h2>
+      <div class="results" id="results">
+        <div class="result-row">
+          <span class="label">Kjøp</span>
+          <span class="value" id="rKjop">–</span>
+        </div>
+        <div class="result-row sub">
+          <span class="label">Frakt + forsikring</span>
+          <span class="value" id="rFrakt">–</span>
+        </div>
+        <div class="result-row">
+          <span class="label">MVA (25 %)</span>
+          <span class="value" id="rMva">–</span>
+        </div>
+        <div class="result-row sub">
+          <span class="label">Engangsavgift før bruksfradrag</span>
+          <span class="value" id="rEngFor">–</span>
+        </div>
+        <div class="result-row">
+          <span class="label">Engangsavgift <span id="bruksBadge"></span></span>
+          <span class="value" id="rEngEtter">–</span>
+        </div>
+        <div class="result-row">
+          <span class="label">Vrakpant</span>
+          <span class="value" id="rVrak">–</span>
+        </div>
+        <div class="result-row total">
+          <span class="label">Totalt ca.</span>
+          <span class="value" id="rTotal">–</span>
+        </div>
+      </div>
+      <p class="note" id="calcNotes"></p>
+      <p class="disclaimer">
+        Estimat – ikke et Skatteetaten-vedtak. Kontroller alltid selv:
+        <a href="https://www.skatteetaten.no/person/avgifter/bil/importere/regn-ut/" target="_blank" rel="noopener">skatteetaten.no – regn ut</a>
+      </p>
+    </section>
+
+    <footer>personbil · avgiftsgruppe a · 2026-regler · fungerer offline</footer>
+  </div>
+  <script>
+/**
+ * Bilimport NOK – 2026 personbil avgiftsgruppe a
+ * Fungerer helt offline (file://). Server er valgfri.
+ */
+
+(function () {
+  "use strict";
+
+  const VRAKPANT = 2400;
+  const MVA_RATE = 0.25;
+  const MWST_RATE = 0.19;
+  const NEDC_FACTOR = 1.24;
+  const SECTION2_PER_KG = 12.71;
+  const SECTION2_THRESHOLD = 500;
+  const ICE_WEIGHT_PER_KG = 260;
+  const ICE_WEIGHT_THRESHOLD = 1200;
+
+  /** Skatteetaten bruksfradrag: [months, percent] sorted ascending */
+  const BRUKSFRADRAG = [
+    [1, 2], [2, 4], [3, 6], [4, 8], [5, 10], [6, 12], [7, 14], [8, 15],
+    [9, 16], [10, 17], [11, 18], [12, 19], [14, 20], [16, 21], [18, 22],
+    [20, 23], [22, 24], [24, 26], [30, 30], [36, 33], [42, 37], [48, 40],
+    [54, 44], [60, 50], [66, 54], [72, 58], [78, 62], [84, 66], [90, 70],
+    [96, 74], [102, 78], [108, 82], [120, 90], [132, 91], [144, 92],
+    [156, 93], [168, 94], [180, 95], [192, 96], [216, 98], [240, 100],
+  ];
+
+  const $ = (id) => document.getElementById(id);
+
+  function todayISO() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+
+  function num(id, fallback) {
+    const v = parseFloat($(id).value);
+    return Number.isFinite(v) ? v : (fallback !== undefined ? fallback : NaN);
+  }
+
+  function fmtNok(n) {
+    if (!Number.isFinite(n)) return "–";
+    return new Intl.NumberFormat("nb-NO", {
+      style: "currency",
+      currency: "NOK",
+      maximumFractionDigits: 0,
+    }).format(Math.round(n));
+  }
+
+  /** Whole months from firstReg to noReg (calendar-based). */
+  function ageMonths(firstRegStr, noRegStr) {
+    if (!firstRegStr || !noRegStr) return 0;
+    const a = new Date(firstRegStr + "T12:00:00");
+    const b = new Date(noRegStr + "T12:00:00");
+    if (b < a) return 0;
+    let months =
+      (b.getFullYear() - a.getFullYear()) * 12 +
+      (b.getMonth() - a.getMonth());
+    if (b.getDate() < a.getDate()) months -= 1;
+    return Math.max(0, months);
+  }
+
+  /** Highest threshold the car has passed. */
+  function bruksfradragPercent(months) {
+    let pct = 0;
+    for (const [thr, p] of BRUKSFRADRAG) {
+      if (months >= thr) pct = p;
+      else break;
+    }
+    return pct;
+  }
+
+  function isElectric(fuel) {
+    return fuel === "el";
+  }
+
+  function isIceOrHybrid(fuel) {
+    return fuel === "bensin" || fuel === "diesel" || fuel === "hybrid";
+  }
+
+  /** Progressive CO2: rate applies only to grams in each band. */
+  function co2Tax(co2) {
+    if (!Number.isFinite(co2) || co2 <= 0) return 0;
+    let tax = 0;
+    const bands = [
+      { upTo: 100, rate: 800 },
+      { upTo: 150, rate: 1600 },
+      { upTo: 225, rate: 3200 },
+      { upTo: Infinity, rate: 5000 },
+    ];
+    let prev = 0;
+    for (const b of bands) {
+      if (co2 <= prev) break;
+      const grams = Math.min(co2, b.upTo) - prev;
+      tax += grams * b.rate;
+      prev = b.upTo;
+    }
+    return tax;
+  }
+
+  /**
+   * Engangsavgift before bruksfradrag.
+   * Returns { total, section2, section3Weight, section3Co2, co2Used, co2Estimated, notes }
+   */
+  function engangsavgiftBefore(weight, co2Input, fuel, nedc) {
+    const notes = [];
+    const section2 = Math.max(0, weight - SECTION2_THRESHOLD) * SECTION2_PER_KG;
+
+    if (isElectric(fuel)) {
+      return {
+        total: section2,
+        section2,
+        section3Weight: 0,
+        section3Co2: 0,
+        co2Used: 0,
+        co2Estimated: false,
+        notes: ["Elbil: kun §2 vektavgift"],
+      };
+    }
+
+    let co2 = co2Input;
+    let co2Estimated = false;
+    if (!Number.isFinite(co2) || co2 <= 0) {
+      if (Number.isFinite(weight) && weight > 0) {
+        co2 = weight / 10;
+        co2Estimated = true;
+        notes.push(`CO₂ mangler – estimert ${co2.toFixed(1)} g/km (egenvekt/10)`);
+      } else {
+        co2 = 0;
+        notes.push("CO₂ mangler og egenvekt mangler – CO₂-avgift = 0");
+      }
+    }
+
+    if (nedc && co2 > 0) {
+      co2 = co2 * NEDC_FACTOR;
+      notes.push(`NEDC: CO₂ × ${NEDC_FACTOR} → ${co2.toFixed(1)} g/km`);
+    }
+
+    let section3Weight = 0;
+    let section3Co2 = 0;
+    if (isIceOrHybrid(fuel)) {
+      section3Weight = Math.max(0, weight - ICE_WEIGHT_THRESHOLD) * ICE_WEIGHT_PER_KG;
+      section3Co2 = co2Tax(co2);
+    }
+
+    return {
+      total: section2 + section3Weight + section3Co2,
+      section2,
+      section3Weight,
+      section3Co2,
+      co2Used: co2,
+      co2Estimated,
+      notes,
+    };
+  }
+
+  function calculate() {
+    const priceEur = num("priceEur", 0);
+    const eurNok = num("eurNok", 11.5);
+    const freight = num("freight", 0);
+    const insurance = num("insurance", 0);
+    const weight = num("weight", NaN);
+    let co2 = num("co2", NaN);
+    const fuel = $("fuel").value;
+    const nedc = $("nedc").checked;
+    const inclMwst = $("inclMwst").checked;
+    const firstReg = $("firstReg").value;
+    const noReg = $("noReg").value || todayISO();
+
+    const notes = [];
+
+    // Net EUR (deduct German MwSt if included)
+    let netEur = priceEur;
+    if (inclMwst && priceEur > 0) {
+      netEur = priceEur / (1 + MWST_RATE);
+      notes.push(`MwSt 19 % trukket: ${priceEur.toFixed(0)} → ${netEur.toFixed(0)} EUR netto`);
+    } else if (priceEur > 0) {
+      notes.push("Pris brukt som netto (Differenzbesteuerung / uten MwSt)");
+    }
+
+    const kjopNok = netEur * eurNok;
+    const customsValue = kjopNok + freight + insurance;
+    const mva = customsValue * MVA_RATE;
+
+    const w = Number.isFinite(weight) ? weight : 0;
+    if (!Number.isFinite(weight) || weight <= 0) {
+      notes.push("Egenvekt mangler – vektavgifter = 0");
+    }
+
+    const eng = engangsavgiftBefore(w, co2, fuel, nedc);
+    notes.push(...eng.notes);
+
+    const months = ageMonths(firstReg, noReg);
+    const bruksPct = bruksfradragPercent(months);
+    const engEtter = eng.total * (1 - bruksPct / 100);
+
+    if (firstReg) {
+      notes.push(`Alder: ${months} mnd → bruksfradrag ${bruksPct} %`);
+    } else {
+      notes.push("Første regdato mangler – bruksfradrag 0 %");
+    }
+
+    const total = kjopNok + freight + insurance + mva + engEtter + VRAKPANT;
+
+    $("rKjop").textContent = fmtNok(kjopNok);
+    $("rFrakt").textContent = fmtNok(freight + insurance);
+    $("rMva").textContent = fmtNok(mva);
+    $("rEngFor").textContent = fmtNok(eng.total);
+    $("rEngEtter").textContent = fmtNok(engEtter);
+    $("rVrak").textContent = fmtNok(VRAKPANT);
+    $("rTotal").textContent = fmtNok(total);
+
+    const badge = $("bruksBadge");
+    if (bruksPct > 0) {
+      badge.innerHTML = `<span class="badge">−${bruksPct} %</span>`;
+    } else {
+      badge.textContent = "";
+    }
+
+    $("calcNotes").textContent = notes.join(" · ");
+
+    return {
+      kjopNok, freight, insurance, mva,
+      engFor: eng.total, engEtter, bruksPct, months,
+      section2: eng.section2,
+      section3Weight: eng.section3Weight,
+      section3Co2: eng.section3Co2,
+      total, vrakpant: VRAKPANT,
+    };
+  }
+
+  /* ---------- Paste text parser ---------- */
+
+  function parseGermanDate(s) {
+    // DD.MM.YYYY or MM/YYYY or MM.YYYY
+    let m = s.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+    if (m) {
+      return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+    }
+    m = s.match(/(\d{1,2})[./](\d{4})/);
+    if (m) {
+      return `${m[2]}-${m[1].padStart(2, "0")}-01`;
+    }
+    return null;
+  }
+
+  function parseListingText(text) {
+    const found = {};
+    const raw = text.replace(/\u00a0/g, " ");
+
+    // Price: 12.450 €, 12.450 EUR, € 12.450, 12450€
+    let m = raw.match(/(?:€\s*|EUR\s*)(\d{1,3}(?:[.\s]\d{3})+|\d+)(?:[,\.]\d+)?/i) ||
+            raw.match(/(\d{1,3}(?:[.\s]\d{3})+|\d+)(?:[,\.]\d+)?\s*(?:€|EUR)/i);
+    if (m) {
+      found.priceEur = parseInt(m[1].replace(/[.\s]/g, ""), 10);
+    }
+
+    // Erstzulassung / EZ
+    m = raw.match(/(?:Erstzulassung|EZ|1\.\s*Zulassung|Første\s*reg)[:\s]*(\d{1,2}[./]\d{1,2}[./]\d{4}|\d{1,2}[./]\d{4})/i);
+    if (m) {
+      found.firstReg = parseGermanDate(m[1]);
+    } else {
+      m = raw.match(/\b(\d{2}\.\d{2}\.\d{4})\b/);
+      if (m) found.firstReg = parseGermanDate(m[1]);
+    }
+
+    // Mileage: 85.000 km, 85000 km
+    m = raw.match(/(\d{1,3}(?:[.\s]\d{3})+|\d+)\s*km\b/i);
+    if (m) {
+      found.mileage = parseInt(m[1].replace(/[.\s]/g, ""), 10);
+    }
+
+    // Power: 110 kW, 150 PS
+    m = raw.match(/(\d+(?:[.,]\d+)?)\s*kW/i);
+    if (m) {
+      found.powerKw = Math.round(parseFloat(m[1].replace(",", ".")));
+    } else {
+      m = raw.match(/(\d+)\s*PS\b/i);
+      if (m) found.powerKw = Math.round(parseInt(m[1], 10) * 0.7355);
+    }
+
+    // CO2: 120 g/km, CO₂ 120, CO2: 120
+    m = raw.match(/(\d{2,3})\s*g\s*\/?\s*km/i) ||
+        raw.match(/CO\s*[₂2]\s*[:\s]*(\d{1,3})/i);
+    if (m) found.co2 = parseInt(m[1], 10);
+
+    // Weight: Leergewicht / Eigengewicht / Gewicht 1600 kg
+    m = raw.match(/(?:Leergewicht|Eigengewicht|Egenvekt|Gewicht)[:\s]*(\d{3,4})\s*kg/i) ||
+        raw.match(/(\d{3,4})\s*kg\b/i);
+    if (m) found.weight = parseInt(m[1], 10);
+
+    // Fuel
+    if (/\b(Elektro|Electric|Elbil|Strom)\b/i.test(raw)) found.fuel = "el";
+    else if (/\b(Hybrid|Plugin|Plug-in)\b/i.test(raw)) found.fuel = "hybrid";
+    else if (/\b(Diesel)\b/i.test(raw)) found.fuel = "diesel";
+    else if (/\b(Benzin|Petrol|Gasoline|Bensin)\b/i.test(raw)) found.fuel = "bensin";
+
+    // MwSt / Differenzbesteuerung (tysk MVA-fradrag)
+    // Ausweisbar / inkl. MwSt → price includes reclaimable VAT → deduct 19%
+    // Differenzbesteuerung / nicht ausweisbar → no German VAT reclaim → use gross as net
+    const noVat = /Differenzbesteuerung|Differenz\s*besteuert|MwSt\.?\s*nicht\s*ausweisbar|Mehrwertsteuer\s*nicht\s*ausweisbar|ohne\s*MwSt|ohne\s*Mehrwertsteuer|VAT\s*not\s*(shown|deductible)|no\s*VAT\s*shown|§\s*25a|§25a/i.test(raw);
+    const withVat = /MwSt\.?\s*ausweisbar|Mehrwertsteuer\s*ausweisbar|inkl\.?\s*(?:19\s*%\s*)?MwSt|inkl\.?\s*Mehrwertsteuer|zzgl\.?\s*MwSt|VAT\s*deductible|VAT\s*shown|MwSt\.?\s*kann\s*ausgewiesen|steuer\s*ausweisbar/i.test(raw);
+    if (noVat) {
+      found.inclMwst = false;
+      found.mwstLabel = "Differenzbesteuerung / MwSt ikke fradragsberettiget";
+    } else if (withVat) {
+      found.inclMwst = true;
+      found.mwstLabel = "MwSt ausweisbar (19 %) – fradragsberettiget";
+    } else {
+      found.mwstLabel = "MwSt ukjent – sjekk manuelt";
+    }
+
+    // Title: first non-empty line that looks like a car name
+    const lines = raw.split(/\n/).map((l) => l.trim()).filter(Boolean);
+    if (lines.length) {
+      const titleLine = lines.find((l) =>
+        /[A-Za-z]{2,}/.test(l) && !/^https?:/.test(l) && l.length < 120
+      );
+      if (titleLine) found.title = titleLine.slice(0, 100);
+    }
+
+    return found;
+  }
+
+  function applyParsed(found) {
+    const applied = [];
+    if (found.priceEur != null) { $("priceEur").value = found.priceEur; applied.push("pris"); }
+    if (found.firstReg) {
+      $("firstReg").value = found.firstReg;
+      applied.push("regdato");
+      // Auto NEDC if before 2018-09-01
+      if (found.firstReg < "2018-09-01") {
+        $("nedc").checked = true;
+        applied.push("NEDC");
+      }
+    }
+    if (found.mileage != null) { $("mileage").value = found.mileage; applied.push("km"); }
+    if (found.powerKw != null) { $("powerKw").value = found.powerKw; applied.push("kW"); }
+    if (found.co2 != null) { $("co2").value = found.co2; applied.push("CO₂"); }
+    if (found.weight != null) { $("weight").value = found.weight; applied.push("vekt"); }
+    if (found.fuel) { $("fuel").value = found.fuel; applied.push("drivstoff"); }
+    if (found.inclMwst != null) {
+      $("inclMwst").checked = found.inclMwst;
+      applied.push(found.inclMwst ? "MwSt ja" : "MwSt nei");
+    }
+    const mwstEl = $("mwstStatus");
+    if (mwstEl) {
+      if (found.mwstLabel) {
+        mwstEl.textContent = found.mwstLabel;
+        mwstEl.className = "status " + (
+          found.inclMwst === true ? "ok" : found.inclMwst === false ? "warn" : ""
+        );
+      } else {
+        mwstEl.textContent = "";
+        mwstEl.className = "status";
+      }
+    }
+    if (found.title) { $("title").value = found.title; }
+    return applied;
+  }
+
+  /* ---------- Optional URL fetch ---------- */
+
+  async function fetchListing() {
+    const url = $("url").value.trim();
+    const status = $("fetchStatus");
+    if (!url) {
+      status.className = "status error";
+      status.textContent = "Lim inn en URL, eller lim inn annonsetekst over.";
+      return;
+    }
+
+    // file:// or no server → skip
+    if (location.protocol === "file:") {
+      status.className = "status warn";
+      status.textContent = "Offline-modus: lim inn annonsetekst i stedet (URL-hent krever server).";
+      return;
+    }
+
+    status.className = "status";
+    status.textContent = "Henter…";
+    $("btnFetch").disabled = true;
+
+    try {
+      const res = await fetch("/api/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = data.error || `HTTP ${res.status}`;
+        status.className = "status error";
+        if (res.status === 403 || /403|access denied|blokker/i.test(msg)) {
+          status.textContent = "mobile.de blokkerte henting (403). Lim inn annonsetekst i feltet over.";
+        } else {
+          status.textContent = `Kunne ikke hente: ${msg}. Lim inn tekst i stedet.`;
+        }
+        return;
+      }
+      const applied = applyParsed(data);
+      status.className = "status ok";
+      status.textContent = applied.length
+        ? `Hentet: ${applied.join(", ")}`
+        : "Ingen felt funnet – fyll inn manuelt.";
+      calculate();
+    } catch (e) {
+      status.className = "status error";
+      status.textContent = "Nettverksfeil / ingen server. Lim inn annonsetekst i stedet.";
+    } finally {
+      $("btnFetch").disabled = false;
+    }
+  }
+
+  /* ---------- Init ---------- */
+
+  function bind() {
+    $("noReg").value = todayISO();
+
+    const inputs = [
+      "priceEur", "eurNok", "inclMwst", "freight", "insurance",
+      "firstReg", "noReg", "weight", "co2", "fuel", "nedc", "powerKw", "mileage",
+    ];
+    for (const id of inputs) {
+      const el = $(id);
+      el.addEventListener("input", calculate);
+      el.addEventListener("change", calculate);
+    }
+
+    $("btnParseText").addEventListener("click", () => {
+      const text = $("pasteText").value;
+      const status = $("pasteStatus");
+      if (!text.trim()) {
+        status.className = "status error";
+        status.textContent = "Lim inn tekst fra annonsen først.";
+        return;
+      }
+      const found = parseListingText(text);
+      const applied = applyParsed(found);
+      status.className = applied.length ? "status ok" : "status warn";
+      status.textContent = applied.length
+        ? `Fant: ${applied.join(", ")}. Sjekk feltene.`
+        : "Fant ingen verdier – fyll inn manuelt.";
+      calculate();
+    });
+
+    $("btnFetch").addEventListener("click", fetchListing);
+
+    // Try live EUR/NOK if online (optional, non-blocking)
+    if (location.protocol !== "file:") {
+      fetch("/api/rate")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (d && d.eurNok) {
+            $("eurNok").value = d.eurNok.toFixed(2);
+            $("rateNote").textContent = `Kurs: ${d.eurNok.toFixed(2)} (live${d.source ? " · " + d.source : ""}).`;
+            calculate();
+          }
+        })
+        .catch(() => {});
+    }
+
+    calculate();
+  }
+
+  // Expose for verification / console
+  window.BilImport = {
+    calculate,
+    engangsavgiftBefore,
+    bruksfradragPercent,
+    ageMonths,
+    co2Tax,
+    parseListingText,
+    VRAKPANT,
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bind);
+  } else {
+    bind();
+  }
+})();
+
+</script>
+</body>
+</html>
