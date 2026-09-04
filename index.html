@@ -737,6 +737,12 @@ button.full {
     const found = {};
     const raw = text.replace(/\u00a0/g, " ");
 
+    const mobileUrl = extractMobileUrl(raw);
+    if (mobileUrl) {
+      found.url = mobileUrl;
+      found.listingId = extractListingId(mobileUrl);
+    }
+
     // Price: 12.450 €, 12.450 EUR, € 12.450, 12450€
     let m = raw.match(/(?:€\s*|EUR\s*)(\d{1,3}(?:[.\s]\d{3})+|\d+)(?:[,\.]\d+)?/i) ||
             raw.match(/(\d{1,3}(?:[.\s]\d{3})+|\d+)(?:[,\.]\d+)?\s*(?:€|EUR)/i);
@@ -795,7 +801,7 @@ button.full {
     } else if (withVat) {
       found.inclMwst = true;
       found.mwstLabel = "MwSt ausweisbar (19 %) – fradragsberettiget";
-    } else {
+    } else if (found.priceEur != null || found.co2 != null || found.weight != null || found.firstReg) {
       found.mwstLabel = "MwSt ukjent – sjekk manuelt";
     }
 
