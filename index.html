@@ -328,28 +328,15 @@ button.full {
     </header>
 
     <section class="card">
-      <h2>Lim inn annonsetekst</h2>
+      <h2>Lim inn fra mobile.de</h2>
       <div class="field">
-        <label for="pasteText">Kopier tekst fra mobile.de-annonsen</label>
-        <textarea id="pasteText" rows="5" placeholder="Lim inn her: pris, Erstzulassung, km, kW, CO₂, Gewicht …"></textarea>
+        <label for="pasteText">Dele → Kopier → lim inn her (lenke eller mer tekst)</label>
+        <textarea id="pasteText" rows="6" placeholder="I found an interesting offer! …&#10;https://m.mobile.de/…&#10;&#10;Eller lim inn mer fra annonsen: pris, MwSt, Erstzulassung, km, CO₂, Gewicht"></textarea>
       </div>
-      <button type="button" id="btnParseText" class="full">Tolke tekst</button>
+      <button type="button" id="btnParseText" class="full">Tolke</button>
       <div class="status" id="pasteStatus" aria-live="polite"></div>
-    </section>
-
-    <section class="card">
-      <h2>URL (valgfritt)</h2>
-      <div class="row">
-        <div class="grow field" style="margin:0">
-          <label for="url">mobile.de-URL</label>
-          <input type="url" id="url" placeholder="https://suchen.mobile.de/..." inputmode="url" autocomplete="off" />
-        </div>
-        <div style="align-self:flex-end">
-          <button type="button" id="btnFetch">Hent</button>
-        </div>
-      </div>
-      <div class="status" id="fetchStatus" aria-live="polite"></div>
-      <p class="note">mobile.de blokkerer ofte server-hent. Bruk «Lim inn annonsetekst» i stedet.</p>
+      <p class="note">Dele-lenken alene har sjelden pris/MwSt. Lim inn mer tekst fra annonsen, eller fyll feltene under. Automatisk henting fra mobile.de virker ikke på denne siden.</p>
+      <input type="hidden" id="url" value="" />
     </section>
 
     <section class="card">
@@ -727,6 +714,25 @@ button.full {
     return null;
   }
 
+
+  function extractMobileUrl(text) {
+    if (!text) return null;
+    const m = text.match(/https?:\/\/(?:m\.|www\.|suchen\.)?mobile\.de\/[^\s<>"']+/i);
+    if (!m) return null;
+    try {
+      const u = new URL(m[0].replace(/[),.]+$/, ""));
+      // keep id
+      return u.toString();
+    } catch (e) {
+      return m[0];
+    }
+  }
+
+  function extractListingId(urlOrText) {
+    const m = String(urlOrText || "").match(/[?&]id=(\d+)/);
+    return m ? m[1] : null;
+  }
+
   function parseListingText(text) {
     const found = {};
     const raw = text.replace(/\u00a0/g, " ");
@@ -842,57 +848,37 @@ button.full {
     return applied;
   }
 
-  /* ---------- Optional URL fetch ---------- */
+  /* ---------- Share / paste handling (no server on GitHub Pages) ---------- */
 
-  async function fetchListing() {
-    const url = $("url").value.trim();
-    const status = $("fetchStatus");
-    if (!url) {
+  function handlePaste() {
+    const text = $("pasteText").value;
+    const status = $("pasteStatus");
+    if (!text.trim()) {
       status.className = "status error";
-      status.textContent = "Lim inn en URL, eller lim inn annonsetekst over.";
+      status.textContent = "Lim inn dele-tekst eller annonsetekst først.";
       return;
     }
+    const found = parseListingText(text);
+    if (found.url && $("url")) $("url").value = found.url;
+    const applied = applyParsed(found);
 
-    // file:// or no server → skip
-    if (location.protocol === "file:") {
-      status.className = "status warn";
-      status.textContent = "Offline-modus: lim inn annonsetekst i stedet (URL-hent krever server).";
-      return;
-    }
+    const onlyLink = found.url && applied.length === 0 && !found.priceEur && !found.co2 && !found.weight;
+    // applied may include nothing if only url
+    const hasSpecs = found.priceEur != null || found.co2 != null || found.weight != null || found.firstReg || found.inclMwst != null;
 
-    status.className = "status";
-    status.textContent = "Henter…";
-    $("btnFetch").disabled = true;
-
-    try {
-      const res = await fetch("/api/parse", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const msg = data.error || `HTTP ${res.status}`;
-        status.className = "status error";
-        if (res.status === 403 || /403|access denied|blokker/i.test(msg)) {
-          status.textContent = "mobile.de blokkerte henting (403). Lim inn annonsetekst i feltet over.";
-        } else {
-          status.textContent = `Kunne ikke hente: ${msg}. Lim inn tekst i stedet.`;
-        }
-        return;
-      }
-      const applied = applyParsed(data);
+    if (hasSpecs) {
       status.className = "status ok";
-      status.textContent = applied.length
-        ? `Hentet: ${applied.join(", ")}`
-        : "Ingen felt funnet – fyll inn manuelt.";
-      calculate();
-    } catch (e) {
-      status.className = "status error";
-      status.textContent = "Nettverksfeil / ingen server. Lim inn annonsetekst i stedet.";
-    } finally {
-      $("btnFetch").disabled = false;
+      const bits = applied.slice();
+      if (found.listingId) bits.unshift("id " + found.listingId);
+      status.textContent = "Fant: " + bits.join(", ") + ". Sjekk feltene.";
+    } else if (found.url) {
+      status.className = "status warn";
+      status.textContent = "Fant mobile.de-lenke" + (found.listingId ? " (id " + found.listingId + ")" : "") + ". Dele-lenken har ikke pris/MwSt – lim inn mer fra annonsen, eller fyll manuelt.";
+    } else {
+      status.className = "status warn";
+      status.textContent = "Fant ingen verdier – fyll inn manuelt.";
     }
+    calculate();
   }
 
   /* ---------- Init ---------- */
@@ -910,38 +896,10 @@ button.full {
       el.addEventListener("change", calculate);
     }
 
-    $("btnParseText").addEventListener("click", () => {
-      const text = $("pasteText").value;
-      const status = $("pasteStatus");
-      if (!text.trim()) {
-        status.className = "status error";
-        status.textContent = "Lim inn tekst fra annonsen først.";
-        return;
-      }
-      const found = parseListingText(text);
-      const applied = applyParsed(found);
-      status.className = applied.length ? "status ok" : "status warn";
-      status.textContent = applied.length
-        ? `Fant: ${applied.join(", ")}. Sjekk feltene.`
-        : "Fant ingen verdier – fyll inn manuelt.";
-      calculate();
+    $("btnParseText").addEventListener("click", handlePaste);
+    $("pasteText").addEventListener("paste", () => {
+      setTimeout(handlePaste, 0);
     });
-
-    $("btnFetch").addEventListener("click", fetchListing);
-
-    // Try live EUR/NOK if online (optional, non-blocking)
-    if (location.protocol !== "file:") {
-      fetch("/api/rate")
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => {
-          if (d && d.eurNok) {
-            $("eurNok").value = d.eurNok.toFixed(2);
-            $("rateNote").textContent = `Kurs: ${d.eurNok.toFixed(2)} (live${d.source ? " · " + d.source : ""}).`;
-            calculate();
-          }
-        })
-        .catch(() => {});
-    }
 
     calculate();
   }
@@ -954,6 +912,8 @@ button.full {
     ageMonths,
     co2Tax,
     parseListingText,
+    extractMobileUrl,
+    extractListingId,
     VRAKPANT,
   };
 
