@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <meta name="theme-color" content="#0f1419"/>
 <meta name="color-scheme" content="dark light"/>
-<title>Chris drømmebil kalkulator v1.5.7</title>
+<title>Chris drømmebil kalkulator v1.5.8</title>
 <style>
 :root{
   --bg:#0f1419;--card:#1a2332;--border:#2d3a4f;--text:#e8eef6;--muted:#8b9bb4;
@@ -65,7 +65,7 @@ details.manual[open]>summary::before{content:"▾ ";}
 <div class="app">
   <header class="hero">
     <h1>Chris drømmebil kalkulator</h1>
-    <p class="ver" id="appVer">v1.5.7 · share-calc · utregning+origin</p>
+    <p class="ver" id="appVer">v1.5.8 · spot-fix · ekte EUR/NOK</p>
     <p class="lead">Lim inn mobile.de-lenke eller dele-tekst → Beregn norsk ca.-pris (2026).</p>
   </header>
 
@@ -96,7 +96,7 @@ details.manual[open]>summary::before{content:"▾ ";}
       <div class="field"><label for="price">Pris (EUR)</label><input id="price" type="number" inputmode="decimal" min="0"/></div>
       <label class="check"><input id="mwst" type="checkbox"/><span>MwSt ausweisbar (÷ 1,19)</span></label>
       <div class="grid" style="margin-top:.75rem">
-        <div class="field"><label for="rate">EUR/NOK (spot)</label><input id="rate" type="number" step="0.01" value="11.5"/></div>
+        <div class="field"><label for="rate">EUR/NOK (spot)</label><input id="rate" type="number" step="0.01" min="5" max="20" placeholder="henter…" value=""/></div>
         <div class="field"><label for="freight">Frakt (NOK)</label><input id="freight" type="number" value="8000"/></div>
       </div>
       <div class="grid">
@@ -130,9 +130,9 @@ details.manual[open]>summary::before{content:"▾ ";}
    * With Apps Script set: direct CORS JSON first (Safari), then JSONP, relays, iframe.
    * Apps Script: parent also tries embed mode (?format=jsonphtml) after relays.
    */
-  const APP_VERSION = 'v1.5.7';
-  const APP_BUILD = 'share-calc';
-  const APP_NOTE = 'del utregning + origin'
+  const APP_VERSION = 'v1.5.8';
+  const APP_BUILD = 'spot-fix';
+  const APP_NOTE = 'ekte spot, ingen 11.5'
   const PROXY_BASE = 'https://script.google.com/macros/s/AKfycbykx0huOEwyX_jziQWgBXNo-vlRY7CgmOZpasIxvN5RlJwm9y-uMScoqjEuoWzkHz4/exec';
 
   const VRAK = 2400, MWST = 0.19, MVA = 0.25;
@@ -357,7 +357,11 @@ details.manual[open]>summary::before{content:"▾ ";}
 
   function calculate() {
     const price = +($("price").value) || 0;
-    const rate = +($("rate").value) || 11.5;
+    const rate = +($("rate").value);
+    if (!(rate > 5 && rate < 20)) {
+      setStatus("error", "Mangler gyldig EUR/NOK-kurs — vent på spot eller skriv inn.");
+      return null;
+    }
     const freight = +($("freight").value) || 0;
     const weight = +($("weight").value) || 0;
     let co2 = +($("co2").value);
@@ -761,29 +765,69 @@ details.manual[open]>summary::before{content:"▾ ";}
     lastTitle = title || "";
   }
 
-  async function loadSpotRate() {
-    const label = document.querySelector('label[for="rate"]');
+  async function fetchEurnokOnce(url, parse) {
+    const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), 6000) : null;
     try {
-      const res = await fetch("https://api.frankfurter.app/latest?from=EUR&to=NOK");
+      const res = await fetch(url, {
+        credentials: "omit",
+        mode: "cors",
+        cache: "no-store",
+        signal: ctrl ? ctrl.signal : undefined
+      });
       if (!res.ok) throw new Error("HTTP " + res.status);
       const data = await res.json();
-      const v = data && data.rates && data.rates.NOK;
-      if (!(v > 0)) throw new Error("no NOK");
-      spotRate = Math.round(v * 100) / 100;
-      $("rate").value = String(spotRate);
-      if (label) {
-        label.textContent = "EUR/NOK (spot)";
-        label.title = "ECB/Frankfurter spot";
-      }
-      $("rate").title = "ECB/Frankfurter spot";
-    } catch (e) {
-      spotRate = null;
-      if (label) {
-        label.textContent = "EUR/NOK (ca.)";
-        label.removeAttribute("title");
-      }
-      $("rate").removeAttribute("title");
+      const v = parse(data);
+      if (!(v > 5 && v < 20)) throw new Error("ugyldig kurs " + v);
+      return Math.round(v * 100) / 100;
+    } finally {
+      if (timer) clearTimeout(timer);
     }
+  }
+
+  async function loadSpotRate() {
+    const label = document.querySelector('label[for="rate"]');
+    const sources = [
+      {
+        name: "Frankfurter/ECB",
+        url: "https://api.frankfurter.app/latest?from=EUR&to=NOK",
+        parse: (d) => d && d.rates && d.rates.NOK
+      },
+      {
+        name: "open.er-api",
+        url: "https://open.er-api.com/v6/latest/EUR",
+        parse: (d) => d && d.rates && d.rates.NOK
+      }
+    ];
+    const errors = [];
+    for (const s of sources) {
+      try {
+        const v = await fetchEurnokOnce(s.url, s.parse);
+        spotRate = v;
+        $("rate").value = String(v);
+        $("rate").dataset.spot = "1";
+        if (label) {
+          label.textContent = "EUR/NOK (spot " + v + ")";
+          label.title = s.name;
+        }
+        $("rate").title = s.name + " spot";
+        if (!$("resultCard").classList.contains("hidden")) calculate();
+        return v;
+      } catch (e) {
+        errors.push(s.name + ": " + (e && e.message ? e.message : String(e)));
+      }
+    }
+    spotRate = null;
+    $("rate").dataset.spot = "0";
+    // Never invent 11.5 — leave empty so calculate refuses
+    if (!$("rate").value) $("rate").value = "";
+    if (label) {
+      label.textContent = "EUR/NOK (mangler spot)";
+      label.title = errors.join(" | ");
+    }
+    $("rate").title = "Spot feilet — skriv inn kurs manuelt";
+    setStatus("error", "Kunne ikke hente EUR/NOK-spot. Skriv inn kurs manuelt. (" + errors.join(" → ") + ")");
+    return null;
   }
 
   async function shareResult() {
@@ -843,6 +887,15 @@ details.manual[open]>summary::before{content:"▾ ";}
     }
 
     $("btnCalc").disabled = true;
+    if (!(+($("rate").value) > 5)) {
+      setStatus("", "Henter EUR/NOK-spot…");
+      await loadSpotRate();
+      if (!(+($("rate").value) > 5)) {
+        $("btnCalc").disabled = false;
+        setStatus("error", "Ingen EUR/NOK-kurs. Skriv inn spot manuelt, så prøv igjen.");
+        return;
+      }
+    }
     setStatus("", "Henter annonse…");
 
     const pasteParsed = parseListingText(text);
