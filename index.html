@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <meta name="theme-color" content="#0f1419"/>
 <meta name="color-scheme" content="dark light"/>
-<title>Chris drømmebil kalkulator v1.5.3</title>
+<title>Chris drømmebil kalkulator v1.5.6</title>
 <style>
 :root{
   --bg:#0f1419;--card:#1a2332;--border:#2d3a4f;--text:#e8eef6;--muted:#8b9bb4;
@@ -65,7 +65,7 @@ details.manual[open]>summary::before{content:"▾ ";}
 <div class="app">
   <header class="hero">
     <h1>Chris drømmebil kalkulator</h1>
-    <p class="ver" id="appVer">v1.5.3 · ios-fetch · proxy fallbacks</p>
+    <p class="ver" id="appVer">v1.5.6 · no-hang · 8s direct</p>
     <p class="lead">Lim inn mobile.de-lenke eller dele-tekst → Beregn norsk ca.-pris (2026).</p>
   </header>
 
@@ -130,9 +130,9 @@ details.manual[open]>summary::before{content:"▾ ";}
    * With Apps Script set: direct CORS JSON first (Safari), then JSONP, relays, iframe.
    * Apps Script: parent also tries embed mode (?format=jsonphtml) after relays.
    */
-  const APP_VERSION = 'v1.5.5';
-  const APP_BUILD = 'safari-cors';
-  const APP_NOTE = 'direct CORS (Safari)'
+  const APP_VERSION = 'v1.5.6';
+  const APP_BUILD = 'no-hang';
+  const APP_NOTE = '8s timeout, ingen relay'
   const PROXY_BASE = 'https://script.google.com/macros/s/AKfycbykx0huOEwyX_jziQWgBXNo-vlRY7CgmOZpasIxvN5RlJwm9y-uMScoqjEuoWzkHz4/exec';
 
   const VRAK = 2400, MWST = 0.19, MVA = 0.25;
@@ -524,8 +524,8 @@ details.manual[open]>summary::before{content:"▾ ";}
         if (settled) return;
         settled = true;
         cleanup();
-        reject(new Error("JSONP timeout (45s)"));
-      }, 45000);
+        reject(new Error("JSONP timeout (12s)"));
+      }, 12000);
       window[cbName] = (data) => {
         if (settled) return;
         settled = true;
@@ -553,7 +553,7 @@ details.manual[open]>summary::before{content:"▾ ";}
   async function fetchViaProxyDirectJson(id, mobileUrl) {
     const url = proxyExecUrl(id, mobileUrl);
     const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
-    const timer = ctrl ? setTimeout(() => ctrl.abort(), 25000) : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), 8000) : null;
     try {
       const res = await fetch(url, {
         credentials: "omit",
@@ -564,6 +564,9 @@ details.manual[open]>summary::before{content:"▾ ";}
       if (!res.ok) throw new Error("direct fetch HTTP " + res.status);
       const data = await res.json();
       return normalizeProxyData(data, "direct fetch");
+    } catch (e) {
+      if (e && e.name === "AbortError") throw new Error("direct timeout (8s)");
+      throw e;
     } finally {
       if (timer) clearTimeout(timer);
     }
@@ -655,14 +658,14 @@ details.manual[open]>summary::before{content:"▾ ";}
       return msg;
     };
 
-    // a) direct JSON — Apps Script returns Access-Control-Allow-Origin: * (Safari OK)
+    // Direct CORS first (Apps Script Access-Control-Allow-Origin: *). Short timeout — no hang.
     try {
       return await fetchViaProxyDirectJson(listingId || id, mobileUrl);
     } catch (e) {
       fail("direct", e);
     }
 
-    // b) JSONP (existing path; Safari sometimes script.onerror)
+    // JSONP fallback (Chrome). Safari often fails on Google 302 — keep short.
     if (listingId) {
       try {
         return await fetchViaProxyJsonp(listingId);
@@ -673,25 +676,7 @@ details.manual[open]>summary::before{content:"▾ ";}
       steps.push("JSONP: mangler listing-id");
     }
 
-    // c) CORS relays around Apps Script JSON
-    try {
-      return await fetchViaCorsRelay(listingId || id, mobileUrl);
-    } catch (e) {
-      fail("relay", e);
-    }
-
-    // d) iframe + postMessage (needs Apps Script format=jsonphtml)
-    if (listingId) {
-      try {
-        return await fetchViaProxyIframe(listingId);
-      } catch (e) {
-        fail("iframe", e);
-      }
-    } else {
-      steps.push("iframe: mangler listing-id");
-    }
-
-    throw new Error("Proxy-hent feilet: " + steps.join(" → "));
+    throw new Error("Henting feilet (" + steps.join(" → ") + "). Fyll inn manuelt.");
   }
 
   async function fetchListingHtml(id) {
