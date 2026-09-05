@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <meta name="theme-color" content="#0f1419"/>
 <meta name="color-scheme" content="dark light"/>
-<title>Chris drømmebil kalkulator v1.5.6</title>
+<title>Chris drømmebil kalkulator v1.5.7</title>
 <style>
 :root{
   --bg:#0f1419;--card:#1a2332;--border:#2d3a4f;--text:#e8eef6;--muted:#8b9bb4;
@@ -65,7 +65,7 @@ details.manual[open]>summary::before{content:"▾ ";}
 <div class="app">
   <header class="hero">
     <h1>Chris drømmebil kalkulator</h1>
-    <p class="ver" id="appVer">v1.5.6 · no-hang · 8s direct</p>
+    <p class="ver" id="appVer">v1.5.7 · share-calc · utregning+origin</p>
     <p class="lead">Lim inn mobile.de-lenke eller dele-tekst → Beregn norsk ca.-pris (2026).</p>
   </header>
 
@@ -130,9 +130,9 @@ details.manual[open]>summary::before{content:"▾ ";}
    * With Apps Script set: direct CORS JSON first (Safari), then JSONP, relays, iframe.
    * Apps Script: parent also tries embed mode (?format=jsonphtml) after relays.
    */
-  const APP_VERSION = 'v1.5.6';
-  const APP_BUILD = 'no-hang';
-  const APP_NOTE = '8s timeout, ingen relay'
+  const APP_VERSION = 'v1.5.7';
+  const APP_BUILD = 'share-calc';
+  const APP_NOTE = 'del utregning + origin'
   const PROXY_BASE = 'https://script.google.com/macros/s/AKfycbykx0huOEwyX_jziQWgBXNo-vlRY7CgmOZpasIxvN5RlJwm9y-uMScoqjEuoWzkHz4/exec';
 
   const VRAK = 2400, MWST = 0.19, MVA = 0.25;
@@ -787,14 +787,34 @@ details.manual[open]>summary::before{content:"▾ ";}
   }
 
   async function shareResult() {
-    const totalText = $("rTotal").textContent || "–";
-    let text = "Chris drømmebil – ca. " + totalText + "\n";
-    if (lastTitle) text += lastTitle + "\n";
-    text += "Annonse: " + (lastListingUrl || "–") + "\n";
-    text += "Kalkulator: https://mikeljungbergtvedt.github.io/bilimport/";
+    if ($("resultCard").classList.contains("hidden")) {
+      setStatus("error", "Beregn først, så kan du dele utregningen.");
+      return;
+    }
+    const lines = [];
+    lines.push("Chris drømmebil – utregning");
+    if (lastTitle) lines.push(lastTitle);
+    lines.push("Annonse: " + (lastListingUrl || "–"));
+    lines.push("");
+    lines.push("Kjøp (netto NOK): " + ($("rKjop").textContent || "–"));
+    lines.push("Frakt: " + ($("rFrakt").textContent || "–"));
+    lines.push("MVA 25 %: " + ($("rMva").textContent || "–"));
+    lines.push("Engangsavgift: " + ($("rEng").textContent || "–"));
+    lines.push("Vrakpant: " + ($("rVrak").textContent || "–"));
+    lines.push("Alder / bruksfradrag: " + ($("rAlder").textContent || "–"));
+    lines.push("Totalt ca.: " + ($("rTotal").textContent || "–"));
+    const rate = $("rate").value;
+    if (rate) lines.push("EUR/NOK: " + rate + (spotRate != null ? " (spot)" : ""));
+    const note = ($("notes").textContent || "").trim();
+    if (note) lines.push(note);
+    lines.push("");
+    lines.push("Kalkulator: https://mikeljungbergtvedt.github.io/bilimport/");
+    const text = lines.join("\n");
+    const title = lastTitle ? ("Chris: " + lastTitle) : "Chris drømmebil – utregning";
     try {
       if (navigator.share) {
-        await navigator.share({ text: text, url: lastListingUrl || undefined });
+        // text only so share targets keep full calc + origin link (url alone often drops the rest)
+        await navigator.share({ title: title, text: text });
         return;
       }
     } catch (e) {
@@ -802,7 +822,7 @@ details.manual[open]>summary::before{content:"▾ ";}
     }
     try {
       await navigator.clipboard.writeText(text);
-      setStatus("ok", "Kopiert");
+      setStatus("ok", "Utregning + annonselenke kopiert");
     } catch (e) {
       setStatus("error", "Kunne ikke dele/kopiere.");
     }
