@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <meta name="theme-color" content="#0f1419"/>
 <meta name="color-scheme" content="dark light"/>
-<title>Bilimport v1.4.2</title>
+<title>Chris drømmebil kalkulator</title>
 <style>
 :root{
   --bg:#0f1419;--card:#1a2332;--border:#2d3a4f;--text:#e8eef6;--muted:#8b9bb4;
@@ -17,7 +17,9 @@
     --accent:#2563eb;--ok:#059669;--warn:#b45309;--err:#dc2626}
 }
 *{box-sizing:border-box}
-body{margin:0;font-family:var(--font);background:var(--bg);color:var(--text);min-height:100dvh;-webkit-text-size-adjust:100%}
+body{margin:0;font-family:var(--font);background:var(--bg);color:var(--text);min-height:100dvh;-webkit-text-size-adjust:100%;position:relative}
+body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;background:url("rr-ghost-bg.jpg") center/cover no-repeat;opacity:.8}
+.app{position:relative;z-index:1}
 .app{max-width:440px;margin:0 auto;padding:1rem 1rem 3rem}
 h1{font-size:1.35rem;margin:0 0 .2rem;font-weight:700}
 p.lead{color:var(--muted);margin:0 0 1rem;font-size:.9rem;line-height:1.35}.ver{font-size:.75rem;color:var(--muted);margin:.15rem 0 0;font-weight:500;font-variant-numeric:tabular-nums}.ver code{font-size:.7rem}
@@ -59,8 +61,8 @@ details.manual[open]>summary::before{content:"▾ ";}
 </head>
 <body>
 <div class="app">
-  <h1>Bilimport</h1>
-  <p class="ver" id="appVer">v1.4.2 · mwst-off · MwSt default av</p>
+  <h1>Chris drømmebil kalkulator</h1>
+  <p class="ver" id="appVer">v1.5.0 · ghost · Chris drømmebil</p>
   <p class="lead">Lim inn mobile.de-lenke eller dele-tekst → Beregn norsk ca.-pris (2026).</p>
 
   <div class="card">
@@ -120,9 +122,9 @@ details.manual[open]>summary::before{content:"▾ ";}
    * PROXY_BASE: Cloudflare Worker or Apps Script /exec URL.
    * Empty = try corsproxy.org then direct translate.goog (CORS often fails on Pages).
    */
-  const APP_VERSION = 'v1.4.2';
-  const APP_BUILD = 'mwst-off';
-  const APP_NOTE = 'MwSt default av';
+  const APP_VERSION = 'v1.5.0';
+  const APP_BUILD = 'ghost';
+  const APP_NOTE = 'Chris + RR Ghost bg 80%';
   const PROXY_BASE = 'https://script.google.com/macros/s/AKfycbykx0huOEwyX_jziQWgBXNo-vlRY7CgmOZpasIxvN5RlJwm9y-uMScoqjEuoWzkHz4/exec';
 
   const VRAK = 2400, MWST = 0.19, MVA = 0.25;
