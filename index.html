@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <meta name="theme-color" content="#0f1419"/>
 <meta name="color-scheme" content="dark light"/>
-<title>Chris drømmebil kalkulator v1.5.2</title>
+<title>Chris drømmebil kalkulator v1.5.3</title>
 <style>
 :root{
   --bg:#0f1419;--card:#1a2332;--border:#2d3a4f;--text:#e8eef6;--muted:#8b9bb4;
@@ -65,7 +65,7 @@ details.manual[open]>summary::before{content:"▾ ";}
 <div class="app">
   <header class="hero">
     <h1>Chris drømmebil kalkulator</h1>
-    <p class="ver" id="appVer">v1.5.2 · share · spot EUR + del-lenke</p>
+    <p class="ver" id="appVer">v1.5.3 · ios-fetch · proxy fallbacks</p>
     <p class="lead">Lim inn mobile.de-lenke eller dele-tekst → Beregn norsk ca.-pris (2026).</p>
   </header>
 
@@ -127,10 +127,12 @@ details.manual[open]>summary::before{content:"▾ ";}
   /**
    * PROXY_BASE: Cloudflare Worker or Apps Script /exec URL.
    * Empty = try corsproxy.org then direct translate.goog (CORS often fails on Pages).
+   * With Apps Script set: direct CORS JSON first (Safari), then JSONP, relays, iframe.
+   * Apps Script: parent also tries embed mode (?format=jsonphtml) after relays.
    */
-  const APP_VERSION = 'v1.5.2';
-  const APP_BUILD = 'share';
-  const APP_NOTE = 'spot EUR + del-lenke';
+  const APP_VERSION = 'v1.5.5';
+  const APP_BUILD = 'safari-cors';
+  const APP_NOTE = 'direct CORS (Safari)'
   const PROXY_BASE = 'https://script.google.com/macros/s/AKfycbykx0huOEwyX_jziQWgBXNo-vlRY7CgmOZpasIxvN5RlJwm9y-uMScoqjEuoWzkHz4/exec';
 
   const VRAK = 2400, MWST = 0.19, MVA = 0.25;
@@ -471,11 +473,48 @@ details.manual[open]>summary::before{content:"▾ ";}
       data.km != null || data.co2 != null || data.fuel || data.inclMwst != null;
   }
 
+  function proxyExecUrl(id, mobileUrl) {
+    const base = PROXY_BASE.replace(/\/$/, "");
+    if (id) return base + "?id=" + encodeURIComponent(id);
+    return base + "?url=" + encodeURIComponent(mobileUrl || "");
+  }
+
+  function normalizeProxyData(data, via) {
+    if (!data || typeof data !== "object") throw new Error(via + ": ugyldig JSON");
+    // Apps Script may set ok:false on HTTP 404 translate pages while still returning fields
+    if (data.ok === false && data.priceEur == null && data.weightKg == null && !listingHasFields(data)) {
+      throw new Error((data.error && (via + ": " + data.error)) || (via + " feilet"));
+    }
+    return data;
+  }
+
+  function parseProxyResponseText(text, via) {
+    let raw = String(text || "").trim();
+    if (!raw) throw new Error(via + ": tomt svar");
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch (e) {
+      throw new Error(via + ": JSON parse feilet");
+    }
+    // allorigins get wrapper (if used later)
+    if (data && typeof data.contents === "string") {
+      try {
+        data = JSON.parse(data.contents);
+      } catch (e2) {
+        throw new Error(via + ": contents parse feilet");
+      }
+    }
+    return normalizeProxyData(data, via);
+  }
+
   function fetchViaProxyJsonp(id) {
     return new Promise((resolve, reject) => {
       const base = PROXY_BASE.replace(/\/$/, "");
       const cbName = "bilimportCb_" + Math.random().toString(36).slice(2, 10);
       const script = document.createElement("script");
+      script.async = true;
+      script.charset = "utf-8";
       let settled = false;
       const cleanup = () => {
         try { delete window[cbName]; } catch (_) { window[cbName] = undefined; }
@@ -485,18 +524,18 @@ details.manual[open]>summary::before{content:"▾ ";}
         if (settled) return;
         settled = true;
         cleanup();
-        reject(new Error("JSONP timeout (25s)"));
-      }, 25000);
+        reject(new Error("JSONP timeout (45s)"));
+      }, 45000);
       window[cbName] = (data) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
         cleanup();
-        if (!data || data.ok === false) {
-          reject(new Error((data && data.error) || "Proxy JSONP feilet"));
-          return;
+        try {
+          resolve(normalizeProxyData(data, "JSONP"));
+        } catch (err) {
+          reject(err);
         }
-        resolve(data);
       };
       script.onerror = () => {
         if (settled) return;
@@ -511,25 +550,148 @@ details.manual[open]>summary::before{content:"▾ ";}
     });
   }
 
-  async function fetchViaProxyJson(id, mobileUrl) {
-    const base = PROXY_BASE.replace(/\/$/, "");
-    const qs = id ? ("?id=" + encodeURIComponent(id)) :
-      ("?url=" + encodeURIComponent(mobileUrl));
-    const res = await fetch(base + qs, { credentials: "omit" });
-    if (!res.ok) throw new Error("Proxy HTTP " + res.status);
-    const data = await res.json();
-    if (!data || data.ok === false) throw new Error((data && data.error) || "Proxy feilet");
-    return data;
+  async function fetchViaProxyDirectJson(id, mobileUrl) {
+    const url = proxyExecUrl(id, mobileUrl);
+    const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), 25000) : null;
+    try {
+      const res = await fetch(url, {
+        credentials: "omit",
+        mode: "cors",
+        redirect: "follow",
+        signal: ctrl ? ctrl.signal : undefined
+      });
+      if (!res.ok) throw new Error("direct fetch HTTP " + res.status);
+      const data = await res.json();
+      return normalizeProxyData(data, "direct fetch");
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
-  async function fetchViaProxy(id, mobileUrl) {
-    const base = PROXY_BASE || "";
-    if (/script\.google\.com/i.test(base)) {
-      const listingId = id || extractListingId(mobileUrl);
-      if (!listingId) throw new Error("Mangler listing-id for JSONP");
-      return fetchViaProxyJsonp(listingId);
+  async function fetchViaCorsRelay(id, mobileUrl) {
+    const target = proxyExecUrl(id, mobileUrl);
+    const relays = [
+      { name: "corsproxy.io", url: "https://corsproxy.io/?" + encodeURIComponent(target) },
+      { name: "allorigins.win", url: "https://api.allorigins.win/raw?url=" + encodeURIComponent(target) }
+    ];
+    const errors = [];
+    for (const r of relays) {
+      try {
+        const res = await fetch(r.url, { credentials: "omit", mode: "cors" });
+        if (!res.ok) {
+          errors.push(r.name + " HTTP " + res.status);
+          continue;
+        }
+        const text = await res.text();
+        const data = parseProxyResponseText(text, r.name);
+        if (data.priceEur == null && !listingHasFields(data)) {
+          errors.push(r.name + ": mangler priceEur");
+          continue;
+        }
+        return data;
+      } catch (e) {
+        errors.push(r.name + ": " + (e && e.message ? e.message : String(e)));
+      }
     }
-    return fetchViaProxyJson(id, mobileUrl);
+    throw new Error("CORS relay feilet (" + errors.join("; ") + ")");
+  }
+
+  function fetchViaProxyIframe(id) {
+    return new Promise((resolve, reject) => {
+      const base = PROXY_BASE.replace(/\/$/, "");
+      const iframe = document.createElement("iframe");
+      iframe.setAttribute("aria-hidden", "true");
+      iframe.tabIndex = -1;
+      iframe.style.cssText = "position:absolute;width:0;height:0;border:0;opacity:0;pointer-events:none";
+      let settled = false;
+      const cleanup = () => {
+        window.removeEventListener("message", onMsg);
+        clearTimeout(timer);
+        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      };
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(new Error("iframe postMessage timeout (45s)"));
+      }, 45000);
+      const onMsg = (ev) => {
+        const msg = ev && ev.data;
+        if (!msg || msg.source !== "bilimport-proxy") return;
+        if (settled) return;
+        settled = true;
+        cleanup();
+        try {
+          resolve(normalizeProxyData(msg.data, "iframe"));
+        } catch (err) {
+          reject(err);
+        }
+      };
+      window.addEventListener("message", onMsg);
+      iframe.onerror = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(new Error("iframe load failed"));
+      };
+      // Apps Script: parent tries embed mode (?format=jsonphtml) after JSON/JSONP/CORS relays
+      iframe.src = base + "?id=" + encodeURIComponent(id) + "&format=jsonphtml";
+      document.body.appendChild(iframe);
+    });
+  }
+
+  /**
+   * Apps Script note: parent also tries embed mode (?format=jsonphtml + iframe/postMessage)
+   * if a–c fail. Redeploy Code.gs with format=jsonphtml for Safari reliability.
+   * Order: direct JSON → JSONP → cors relays → iframe.
+   */
+  async function fetchViaProxy(id, mobileUrl) {
+    const listingId = id || extractListingId(mobileUrl);
+    const steps = [];
+    const fail = (label, err) => {
+      const msg = err && err.message ? err.message : String(err);
+      steps.push(label + ": " + msg);
+      return msg;
+    };
+
+    // a) direct JSON — Apps Script returns Access-Control-Allow-Origin: * (Safari OK)
+    try {
+      return await fetchViaProxyDirectJson(listingId || id, mobileUrl);
+    } catch (e) {
+      fail("direct", e);
+    }
+
+    // b) JSONP (existing path; Safari sometimes script.onerror)
+    if (listingId) {
+      try {
+        return await fetchViaProxyJsonp(listingId);
+      } catch (e) {
+        fail("JSONP", e);
+      }
+    } else {
+      steps.push("JSONP: mangler listing-id");
+    }
+
+    // c) CORS relays around Apps Script JSON
+    try {
+      return await fetchViaCorsRelay(listingId || id, mobileUrl);
+    } catch (e) {
+      fail("relay", e);
+    }
+
+    // d) iframe + postMessage (needs Apps Script format=jsonphtml)
+    if (listingId) {
+      try {
+        return await fetchViaProxyIframe(listingId);
+      } catch (e) {
+        fail("iframe", e);
+      }
+    } else {
+      steps.push("iframe: mangler listing-id");
+    }
+
+    throw new Error("Proxy-hent feilet: " + steps.join(" → "));
   }
 
   async function fetchListingHtml(id) {
@@ -731,9 +893,11 @@ details.manual[open]>summary::before{content:"▾ ";}
         $("listingMeta").innerHTML = "id " + escapeHtml(onlyId);
       }
       const why = fetchErr && fetchErr.message ? fetchErr.message : "ukjent feil";
+      const hint = PROXY_BASE
+        ? ("Steg som feilet: " + why + ". Fyll feltene manuelt eller prøv igjen.")
+        : ("Full auto-hent krever proxy (Worker/Apps Script). Fyll feltene manuelt.");
       setStatus("error",
-        "Auto-hent feilet (" + why + "). Kun listing-id funnet — fyll feltene manuelt. " +
-        "Full auto-hent krever proxy (Worker/Apps Script) senere.");
+        "Auto-hent feilet (" + why + "). Kun listing-id funnet — " + hint);
     } finally {
       $("btnCalc").disabled = false;
     }
