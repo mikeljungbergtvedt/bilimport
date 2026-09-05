@@ -317,11 +317,15 @@ details.manual[open]>summary::before{content:"▾ ";}
     return out;
   }
 
-  function coerceFuel(fuel, title) {
+  function coerceFuel(fuel, title, weight, co2) {
     let f = fuel || "bensin";
     const t = String(title || "");
     if (f === "el" && /\b(Benzin|AMG|G\s*63|Biturbo|CGI|TSI|TFSI|Petrol)\b/i.test(t)) f = "bensin";
     if (f === "el" && /\bDiesel\b/i.test(t) && !/Hybrid/i.test(t)) f = "diesel";
+    // Proxy often false-El when page mentions Elektro elsewhere; heavy cars without CO2/EQ title → ICE
+    if (f === "el" && (weight || 0) >= 2000 && !(co2 > 0) && !/\b(EQ|Electric|Elektro|Strom|EV)\b/i.test(t)) {
+      f = "bensin";
+    }
     return f;
   }
 
@@ -332,7 +336,7 @@ details.manual[open]>summary::before{content:"▾ ";}
     if (data.weightKg != null) $("weight").value = data.weightKg;
     if (data.co2 != null) $("co2").value = data.co2;
     if (data.km != null) $("km").value = data.km;
-    if (data.fuel) $("fuel").value = coerceFuel(data.fuel, data.title);
+    if (data.fuel) $("fuel").value = coerceFuel(data.fuel, data.title, data.weightKg, data.co2);
   }
 
   function calculate() {
