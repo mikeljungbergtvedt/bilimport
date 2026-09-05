@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <meta name="theme-color" content="#0f1419"/>
 <meta name="color-scheme" content="dark light"/>
-<title>Chris drømmebil kalkulator v1.5.1</title>
+<title>Chris drømmebil kalkulator v1.5.2</title>
 <style>
 :root{
   --bg:#0f1419;--card:#1a2332;--border:#2d3a4f;--text:#e8eef6;--muted:#8b9bb4;
@@ -65,7 +65,7 @@ details.manual[open]>summary::before{content:"▾ ";}
 <div class="app">
   <header class="hero">
     <h1>Chris drømmebil kalkulator</h1>
-    <p class="ver" id="appVer">v1.5.1 · ghost · synlig tittel + bil</p>
+    <p class="ver" id="appVer">v1.5.2 · share · spot EUR + del-lenke</p>
     <p class="lead">Lim inn mobile.de-lenke eller dele-tekst → Beregn norsk ca.-pris (2026).</p>
   </header>
 
@@ -83,9 +83,11 @@ details.manual[open]>summary::before{content:"▾ ";}
     <div class="row"><span>MVA 25 %</span><span id="rMva">–</span></div>
     <div class="row"><span>Engangsavgift</span><span id="rEng">–</span></div>
     <div class="row"><span>Vrakpant</span><span id="rVrak">–</span></div>
+    <div class="row"><span>Alder / bruksfradrag</span><span id="rAlder">–</span></div>
     <div class="total"><span>Totalt ca.</span><b id="rTotal">–</b></div>
     <p class="note" id="notes"></p>
     <p class="note">Estimat – ikke Skatteetaten-vedtak. Preferer Leergewicht.</p>
+    <button type="button" class="btn secondary" id="btnShare" style="margin-top:.75rem">Del</button>
   </div>
 
   <details class="card manual hidden" id="manualWrap">
@@ -94,12 +96,12 @@ details.manual[open]>summary::before{content:"▾ ";}
       <div class="field"><label for="price">Pris (EUR)</label><input id="price" type="number" inputmode="decimal" min="0"/></div>
       <label class="check"><input id="mwst" type="checkbox"/><span>MwSt ausweisbar (÷ 1,19)</span></label>
       <div class="grid" style="margin-top:.75rem">
-        <div class="field"><label for="rate">EUR/NOK</label><input id="rate" type="number" step="0.01" value="11.5"/></div>
+        <div class="field"><label for="rate">EUR/NOK (spot)</label><input id="rate" type="number" step="0.01" value="11.5"/></div>
         <div class="field"><label for="freight">Frakt (NOK)</label><input id="freight" type="number" value="8000"/></div>
       </div>
       <div class="grid">
         <div class="field"><label for="first">Første reg.</label><input id="first" type="month"/></div>
-        <div class="field"><label for="noreg">Reg. i Norge</label><input id="noreg" type="month"/></div>
+        <div class="field"><label for="noreg">Planlagt reg. Norge</label><input id="noreg" type="month"/></div>
       </div>
       <div class="grid">
         <div class="field"><label for="weight">Egenvekt (kg)</label><input id="weight" type="number" inputmode="numeric"/></div>
@@ -126,9 +128,9 @@ details.manual[open]>summary::before{content:"▾ ";}
    * PROXY_BASE: Cloudflare Worker or Apps Script /exec URL.
    * Empty = try corsproxy.org then direct translate.goog (CORS often fails on Pages).
    */
-  const APP_VERSION = 'v1.5.1';
-  const APP_BUILD = 'ghost';
-  const APP_NOTE = 'hvit tittel + glass-kort';
+  const APP_VERSION = 'v1.5.2';
+  const APP_BUILD = 'share';
+  const APP_NOTE = 'spot EUR + del-lenke';
   const PROXY_BASE = 'https://script.google.com/macros/s/AKfycbykx0huOEwyX_jziQWgBXNo-vlRY7CgmOZpasIxvN5RlJwm9y-uMScoqjEuoWzkHz4/exec';
 
   const VRAK = 2400, MWST = 0.19, MVA = 0.25;
@@ -140,6 +142,10 @@ details.manual[open]>summary::before{content:"▾ ";}
   ];
 
   const $ = (id) => document.getElementById(id);
+
+  let spotRate = null;
+  let lastListingUrl = "";
+  let lastTitle = "";
 
   function todayMonth() {
     const d = new Date();
@@ -388,6 +394,7 @@ details.manual[open]>summary::before{content:"▾ ";}
     const engE = eng * (1 - pct / 100);
     if ($("first").value) notes.push("Bruksfradrag " + pct + " % (" + m + " mnd)");
     else notes.push("Ingen EZ → bruksfradrag 0 %");
+    if (spotRate != null) notes.push("Kurs " + rate + " (spot)");
 
     const total = kjop + freight + mva + engE + VRAK;
     $("rKjop").textContent = fmt(kjop);
@@ -395,6 +402,7 @@ details.manual[open]>summary::before{content:"▾ ";}
     $("rMva").textContent = fmt(mva);
     $("rEng").textContent = fmt(engE);
     $("rVrak").textContent = fmt(VRAK);
+    $("rAlder").textContent = $("first").value ? (m + " mnd · −" + pct + " %") : "–";
     $("rTotal").textContent = fmt(total);
     $("notes").textContent = notes.join(" · ");
     return { total, co2Est };
@@ -580,6 +588,79 @@ details.manual[open]>summary::before{content:"▾ ";}
     return (prefix || "Fant: ") + found.join(", ");
   }
 
+  function cleanMobileUrl(url) {
+    if (!url) return "";
+    try {
+      const u = new URL(url);
+      // drop tracking params
+      ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "ref"].forEach((k) => u.searchParams.delete(k));
+      return u.toString().replace(/[),.]+$/, "");
+    } catch (e) {
+      return String(url).replace(/[?&]utm_[^=]+=[^&]*/gi, "").replace(/[),.]+$/, "");
+    }
+  }
+
+  function setLastListing(id, mobileUrl, title) {
+    const cleaned = cleanMobileUrl(mobileUrl);
+    const lid = id || extractListingId(cleaned) || extractListingId(mobileUrl) || "";
+    // Prefer canonical details URL from id; id preferably from cleaned extracted mobile URL
+    if (lid) {
+      lastListingUrl = "https://suchen.mobile.de/fahrzeuge/details.html?id=" + lid;
+    } else if (cleaned) {
+      lastListingUrl = cleaned;
+    } else {
+      lastListingUrl = "";
+    }
+    lastTitle = title || "";
+  }
+
+  async function loadSpotRate() {
+    const label = document.querySelector('label[for="rate"]');
+    try {
+      const res = await fetch("https://api.frankfurter.app/latest?from=EUR&to=NOK");
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      const v = data && data.rates && data.rates.NOK;
+      if (!(v > 0)) throw new Error("no NOK");
+      spotRate = Math.round(v * 100) / 100;
+      $("rate").value = String(spotRate);
+      if (label) {
+        label.textContent = "EUR/NOK (spot)";
+        label.title = "ECB/Frankfurter spot";
+      }
+      $("rate").title = "ECB/Frankfurter spot";
+    } catch (e) {
+      spotRate = null;
+      if (label) {
+        label.textContent = "EUR/NOK (ca.)";
+        label.removeAttribute("title");
+      }
+      $("rate").removeAttribute("title");
+    }
+  }
+
+  async function shareResult() {
+    const totalText = $("rTotal").textContent || "–";
+    let text = "Chris drømmebil – ca. " + totalText + "\n";
+    if (lastTitle) text += lastTitle + "\n";
+    text += "Annonse: " + (lastListingUrl || "–") + "\n";
+    text += "Kalkulator: https://mikeljungbergtvedt.github.io/bilimport/";
+    try {
+      if (navigator.share) {
+        await navigator.share({ text: text, url: lastListingUrl || undefined });
+        return;
+      }
+    } catch (e) {
+      if (e && e.name === "AbortError") return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setStatus("ok", "Kopiert");
+    } catch (e) {
+      setStatus("error", "Kunne ikke dele/kopiere.");
+    }
+  }
+
   async function beregn() {
     const text = $("paste").value.trim();
     if (!text) {
@@ -622,6 +703,7 @@ details.manual[open]>summary::before{content:"▾ ";}
         $("manualWrap").classList.remove("hidden");
         $("resultCard").classList.remove("hidden");
         showListingMeta(data);
+        setLastListing(data.id || id, mobileUrl, data.title);
         calculate();
         setStatus("ok", statusFromData(data));
         return;
@@ -632,6 +714,7 @@ details.manual[open]>summary::before{content:"▾ ";}
         $("manualWrap").classList.remove("hidden");
         $("resultCard").classList.remove("hidden");
         showListingMeta(pasteParsed);
+        setLastListing(pasteParsed.id || id, mobileUrl, pasteParsed.title);
         calculate();
         const msg = fetchErr
           ? "Auto-hent feilet; brukte felter fra limt tekst. " + statusFromData(pasteParsed, "Fra tekst: ")
@@ -662,12 +745,18 @@ details.manual[open]>summary::before{content:"▾ ";}
     })[c]);
   }
 
+  $("appVer").textContent = APP_VERSION + " · " + APP_BUILD + " · " + APP_NOTE;
+  document.title = "Chris drømmebil kalkulator " + APP_VERSION;
   $("noreg").value = todayMonth();
+  loadSpotRate().then(() => {
+    if (!$("resultCard").classList.contains("hidden")) calculate();
+  });
   $("btnCalc").addEventListener("click", beregn);
   $("btnRecalc").addEventListener("click", () => {
     calculate();
     setStatus("ok", "Oppdatert.");
   });
+  $("btnShare").addEventListener("click", shareResult);
   ["price", "mwst", "rate", "freight", "first", "noreg", "weight", "co2", "fuel"].forEach((id) => {
     $(id).addEventListener("change", calculate);
   });
