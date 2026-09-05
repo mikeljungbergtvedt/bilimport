@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <meta name="theme-color" content="#0f1419"/>
 <meta name="color-scheme" content="dark light"/>
-<title>Chris drømmebil kalkulator</title>
+<title>Chris drømmebil kalkulator v1.5.1</title>
 <style>
 :root{
   --bg:#0f1419;--card:#1a2332;--border:#2d3a4f;--text:#e8eef6;--muted:#8b9bb4;
@@ -18,12 +18,14 @@
 }
 *{box-sizing:border-box}
 body{margin:0;font-family:var(--font);background:var(--bg);color:var(--text);min-height:100dvh;-webkit-text-size-adjust:100%;position:relative}
-body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;background:url("rr-ghost-bg.jpg") center/cover no-repeat;opacity:.8}
-.app{position:relative;z-index:1}
-.app{max-width:440px;margin:0 auto;padding:1rem 1rem 3rem}
-h1{font-size:1.35rem;margin:0 0 .2rem;font-weight:700}
-p.lead{color:var(--muted);margin:0 0 1rem;font-size:.9rem;line-height:1.35}.ver{font-size:.75rem;color:var(--muted);margin:.15rem 0 0;font-weight:500;font-variant-numeric:tabular-nums}.ver code{font-size:.7rem}
-.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1rem;margin-bottom:.85rem}
+body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;background:url("rr-ghost-bg.jpg") center 28%/cover no-repeat;opacity:1}
+body::after{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;background:linear-gradient(180deg, rgba(8,12,18,.55) 0%, rgba(8,12,18,.15) 28%, rgba(8,12,18,.35) 100%)}
+.app{position:relative;z-index:1;max-width:440px;margin:0 auto;padding:1rem 1rem 3rem}
+.hero{min-height:200px;display:flex;flex-direction:column;justify-content:flex-end;margin-bottom:.35rem}
+h1{font-size:1.55rem;margin:0 0 .2rem;font-weight:800;color:#fff;text-shadow:0 2px 14px rgba(0,0,0,.9),0 1px 3px rgba(0,0,0,.95)}
+p.lead{color:rgba(232,238,246,.92);margin:0 0 .25rem;font-size:.9rem;line-height:1.35;text-shadow:0 1px 8px rgba(0,0,0,.8)}.ver{font-size:.75rem;color:rgba(232,238,246,.88);margin:.15rem 0 .55rem;font-weight:500;font-variant-numeric:tabular-nums;text-shadow:0 1px 6px rgba(0,0,0,.75)}.ver code{font-size:.7rem}
+.card{background:rgba(26,35,50,.72);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:1rem;margin-bottom:.85rem;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+@media(prefers-color-scheme:light){.card{background:rgba(255,255,255,.78);border-color:rgba(15,23,42,.1)}}
 label{display:block;font-size:.78rem;color:var(--muted);margin:0 0 .35rem;font-weight:600}
 textarea,input,select{
   width:100%;padding:.75rem .9rem;font-size:1.05rem;border-radius:10px;
@@ -61,9 +63,11 @@ details.manual[open]>summary::before{content:"▾ ";}
 </head>
 <body>
 <div class="app">
-  <h1>Chris drømmebil kalkulator</h1>
-  <p class="ver" id="appVer">v1.5.0 · ghost · Chris drømmebil</p>
-  <p class="lead">Lim inn mobile.de-lenke eller dele-tekst → Beregn norsk ca.-pris (2026).</p>
+  <header class="hero">
+    <h1>Chris drømmebil kalkulator</h1>
+    <p class="ver" id="appVer">v1.5.1 · ghost · synlig tittel + bil</p>
+    <p class="lead">Lim inn mobile.de-lenke eller dele-tekst → Beregn norsk ca.-pris (2026).</p>
+  </header>
 
   <div class="card">
     <label for="paste">Lim inn lenke / dele-tekst</label>
@@ -122,9 +126,9 @@ details.manual[open]>summary::before{content:"▾ ";}
    * PROXY_BASE: Cloudflare Worker or Apps Script /exec URL.
    * Empty = try corsproxy.org then direct translate.goog (CORS often fails on Pages).
    */
-  const APP_VERSION = 'v1.5.0';
+  const APP_VERSION = 'v1.5.1';
   const APP_BUILD = 'ghost';
-  const APP_NOTE = 'Chris + RR Ghost bg 80%';
+  const APP_NOTE = 'hvit tittel + glass-kort';
   const PROXY_BASE = 'https://script.google.com/macros/s/AKfycbykx0huOEwyX_jziQWgBXNo-vlRY7CgmOZpasIxvN5RlJwm9y-uMScoqjEuoWzkHz4/exec';
 
   const VRAK = 2400, MWST = 0.19, MVA = 0.25;
