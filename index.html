@@ -317,6 +317,14 @@ details.manual[open]>summary::before{content:"▾ ";}
     return out;
   }
 
+  function coerceFuel(fuel, title) {
+    let f = fuel || "bensin";
+    const t = String(title || "");
+    if (f === "el" && /\b(Benzin|AMG|G\s*63|Biturbo|CGI|TSI|TFSI|Petrol)\b/i.test(t)) f = "bensin";
+    if (f === "el" && /\bDiesel\b/i.test(t) && !/Hybrid/i.test(t)) f = "diesel";
+    return f;
+  }
+
   function applyListing(data) {
     if (data.priceEur != null) $("price").value = data.priceEur;
     if (data.inclMwst != null) $("mwst").checked = !!data.inclMwst;
@@ -324,7 +332,7 @@ details.manual[open]>summary::before{content:"▾ ";}
     if (data.weightKg != null) $("weight").value = data.weightKg;
     if (data.co2 != null) $("co2").value = data.co2;
     if (data.km != null) $("km").value = data.km;
-    if (data.fuel) $("fuel").value = data.fuel;
+    if (data.fuel) $("fuel").value = coerceFuel(data.fuel, data.title);
   }
 
   function calculate() {
@@ -594,6 +602,11 @@ details.manual[open]>summary::before{content:"▾ ";}
     try {
       if (data && listingHasFields(data)) {
         applyListing(data);
+      const paste = $("paste").value;
+      if ($("fuel").value === "el") {
+        if (/\bBenzin\b/i.test(paste) || /\bAMG\b/i.test(paste) || /G\s*63/i.test(paste)) $("fuel").value = "bensin";
+        else if (/\bDiesel\b/i.test(paste)) $("fuel").value = "diesel";
+      }
         $("manualWrap").classList.remove("hidden");
         $("resultCard").classList.remove("hidden");
         showListingMeta(data);
