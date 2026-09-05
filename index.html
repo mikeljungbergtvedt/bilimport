@@ -207,8 +207,8 @@ details.manual[open]>summary::before{content:"▾ ";}
   }
 
   function extractListingId(text) {
-    const m = String(text || "").match(/[?&]id=(\d{10,})/i) ||
-      String(text || "").match(/\/(\d{14,})(?:\.html)?(?:[?#]|$)/);
+    const m = String(text || "").match(/[?&]id=(\d{6,})/i) ||
+      String(text || "").match(/\/(\d{6,})(?:\.html)?(?:[?#]|$)/);
     return m ? m[1] : null;
   }
 
@@ -232,8 +232,8 @@ details.manual[open]>summary::before{content:"▾ ";}
       km: null, weightKg: null, co2: null, fuel: null, title: null, notes
     };
 
-    let m = html.match(/\\"id\\"\s*:\s*(\d{10,})/) || html.match(/"id"\s*:\s*(\d{10,})/) ||
-      html.match(/[?&]id=(\d{10,})/);
+    let m = html.match(/\\"id\\"\s*:\s*(\d{6,})/) || html.match(/"id"\s*:\s*(\d{6,})/) ||
+      html.match(/[?&]id=(\d{6,})/);
     if (m) out.id = m[1];
 
     m = html.match(/\\"price\\"\s*:\s*\{\s*\\"grs\\"\s*:\s*\{\s*\\"amount\\"\s*:\s*(\d+)/) ||
