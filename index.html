@@ -117,15 +117,7 @@ details.manual[open]>summary::before{content:"▾ ";}
   "use strict";
 
   /**
-   * Set to your Cloudflare Worker or Apps Script URL when deployed, e.g.:
-   *   const APP_VERSION = 'v1.4.0';
-  const APP_BUILD = '380f7a7';
-  const APP_NOTE = 'godtar id fra 6 siffer (share-lenker)';
-  const PROXY_BASE = 'https://bil-import.YOUR_SUBDOMAIN.workers.dev';
-   *   const APP_VERSION = 'v1.4.0';
-  const APP_BUILD = '380f7a7';
-  const APP_NOTE = 'godtar id fra 6 siffer (share-lenker)';
-  const PROXY_BASE = 'https://script.google.com/macros/s/XXXX/exec';
+   * PROXY_BASE: Cloudflare Worker or Apps Script /exec URL.
    * Empty = try corsproxy.org then direct translate.goog (CORS often fails on Pages).
    */
   const APP_VERSION = 'v1.4.0';
